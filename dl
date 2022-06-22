@@ -1,0 +1,15 @@
+#! /usr/bin/env python3
+from argparse import ArgumentParser
+import sys
+
+
+def main():
+  parser = ArgumentParser(description='')
+  parser.add_argument('var', type=str, help='')
+  args = parser.parse_args()
+  var = args.var
+  sys.exit(var)
+
+
+if __name__ == '__main__':
+  main()
