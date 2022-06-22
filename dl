@@ -4,12 +4,15 @@ import sys
 
 
 def main():
-  parser = ArgumentParser(description='')
-  parser.add_argument('var', type=str, help='')
-  args = parser.parse_args()
-  var = args.var
-  sys.exit(var)
+    parser = ArgumentParser(description='dl: your ultimate file downloader')
+    parser.add_argument(
+        'src', type=str, help='the source location to download the file from')
+    parser.add_argument(
+        'dest', type=str, help='the destination to place the file at (- for stdout, cb for clipboard)')
+    args = parser.parse_args()
+    src = args.src
+    dest = args.dest
 
 
 if __name__ == '__main__':
-  main()
+    main()
