@@ -2,12 +2,20 @@
 from argparse import ArgumentParser
 import os
 import re
+import sys
 import time
 import shutil
 import requests
 
 URL_REGEX = r'((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+(:[0-9]+)?|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w\-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)'
 CACHE_DIR = os.environ.get('DL_CACHE_DIR') or os.path.expanduser('~/.dl-cache')
+
+
+def change_stdout(on_off):
+    if on_off:
+        sys.stdout = sys.__stdout__
+    else:
+        sys.stdout = open(os.devnull, 'w')
 
 
 def main():
@@ -42,12 +50,19 @@ def main():
         os.mkdir(CACHE_DIR)
 
     if type_ == 'f':
-        print(f'copying {src} to {dest}...')
-        start = time.time()
-        shutil.copyfile(src, dest)
-        end = time.time()
-        print(f'done in {round(end - start, 2)} seconds')
+        if dest == '-':
+            with open(src, 'rb') as src_f:
+                data = src_f.read()
+            sys.stdout.buffer.write(data)
+        else:
+            print(f'copying {src} to {dest}...')
+            start = time.time()
+            shutil.copyfile(src, dest)
+            end = time.time()
+            print(f'done in {round(end - start, 2)} seconds')
     elif type_ == 'u':
+        if dest == '-':
+            change_stdout(0)
         func = requests.get if method == 'get' else requests.post
         print('sending http request...')
         start = time.time()
@@ -58,20 +73,24 @@ def main():
         if resp.status_code != 200:
             parser.error(f'got status code {resp.status_code}')
 
-        cache_out = os.path.join(CACHE_DIR, str(time.time()))
-        print('caching content...')
+        if dest == '-':
+            change_stdout(1)
+            sys.stdout.buffer.write(resp.content)
+        else:
+            cache_out = os.path.join(CACHE_DIR, str(time.time()))
+            print('caching content...')
 
-        with open(cache_out, 'wb') as cache_out_f:
+            with open(cache_out, 'wb') as cache_out_f:
+                start = time.time()
+                cache_out_f.write(resp.content)
+                end = time.time()
+
+            print(f'done in {round(end - start, 2)} seconds')
+            print('moving cached file to destination...')
             start = time.time()
-            cache_out_f.write(resp.content)
+            shutil.move(cache_out, dest)
             end = time.time()
-
-        print(f'done in {round(end - start, 2)} seconds')
-        print('moving cached file to destination...')
-        start = time.time()
-        shutil.move(cache_out, dest)
-        end = time.time()
-        print(f'done in {round(end - start, 2)} seconds')
+            print(f'done in {round(end - start, 2)} seconds')
 
 
 if __name__ == '__main__':
