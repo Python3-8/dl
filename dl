@@ -8,7 +8,9 @@ def main():
     parser.add_argument(
         'src', type=str, help='the source location to download the file from')
     parser.add_argument(
-        'dest', type=str, help='the destination to place the file at (- for stdout, cb for clipboard)')
+        'dest', type=str,
+        help='the destination to place the file at (- for stdout, cb for'
+        ' clipboard)')
     args = parser.parse_args()
     src = args.src
     dest = args.dest
