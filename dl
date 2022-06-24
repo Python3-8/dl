@@ -1,6 +1,13 @@
 #! /usr/bin/env python3
 from argparse import ArgumentParser
-import sys
+import os
+import re
+import time
+import shutil
+import requests
+
+URL_REGEX = r'((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+(:[0-9]+)?|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w\-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)'
+CACHE_DIR = os.environ.get('DL_CACHE_DIR') or os.path.expanduser('~/.dl-cache')
 
 
 def main():
@@ -11,9 +18,60 @@ def main():
         'dest', type=str,
         help='the destination to place the file at (- for stdout, cb for'
         ' clipboard)')
+    parser.add_argument('-r', '--req', type=str,
+                        help='the source http request type',
+                        choices=('get', 'post'), default='get')
     args = parser.parse_args()
     src = args.src
     dest = args.dest
+    method = args.req
+    type_ = None
+
+    if os.path.isfile(src):
+        type_ = 'f'
+    elif re.match(URL_REGEX, src):
+        type_ = 'u'
+
+    if not type_:
+        parser.error(f'{src}: source is neither a file nor a url')
+
+    if os.path.isfile(dest) or os.path.isdir(dest):
+        parser.error(f'{dest}: destination already exists')
+
+    if not os.path.isdir(CACHE_DIR):
+        os.mkdir(CACHE_DIR)
+
+    if type_ == 'f':
+        print(f'copying {src} to {dest}...')
+        start = time.time()
+        shutil.copyfile(src, dest)
+        end = time.time()
+        print(f'done in {round(end - start, 2)} seconds')
+    elif type_ == 'u':
+        func = requests.get if method == 'get' else requests.post
+        print('sending http request...')
+        start = time.time()
+        resp = func(src)
+        end = time.time()
+        print(f'sent and got response in {round(end - start, 2)} seconds')
+
+        if resp.status_code != 200:
+            parser.error(f'got status code {resp.status_code}')
+
+        cache_out = os.path.join(CACHE_DIR, str(time.time()))
+        print('caching content...')
+
+        with open(cache_out, 'wb') as cache_out_f:
+            start = time.time()
+            cache_out_f.write(resp.content)
+            end = time.time()
+
+        print(f'done in {round(end - start, 2)} seconds')
+        print('moving cached file to destination...')
+        start = time.time()
+        shutil.move(cache_out, dest)
+        end = time.time()
+        print(f'done in {round(end - start, 2)} seconds')
 
 
 if __name__ == '__main__':
