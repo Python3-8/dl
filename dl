@@ -110,7 +110,8 @@ def main():
 
             with open(cache_out, 'wb') as cache_out_f:
                 start = time.time()
-                cache_out_f.write(resp.content)
+                for chunk in resp.iter_content(32):
+                    cache_out_f.write(chunk)
                 end = time.time()
 
             print(f'done in {round(end - start, 2)} seconds')
