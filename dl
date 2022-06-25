@@ -1,13 +1,19 @@
 #! /usr/bin/env python3
 from argparse import ArgumentParser
+from functools import partial
 import os
 import re
 import sys
 import time
 import shutil
+import pyclip
 import requests
 
-URL_REGEX = r'((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+(:[0-9]+)?|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w\-_]*)?\??(?:[-\+=&;%@.\w_]*)#?(?:[\w]*))?)'
+URL_REGEX = (
+	r'((([A-Za-z]{3,9}:(?:\/\/)?)(?:[-;:&=\+\$,\w]+@)?[A-Za-z0-9.-]+(:[0-9]+)?'
+	r'|(?:www.|[-;:&=\+\$,\w]+@)[A-Za-z0-9.-]+)((?:\/[\+~%\/.\w\-_]*)?\??(?:[-'
+	r'\+=&;%@.\w_]*)#?(?:[\w]*))?)'
+)
 CACHE_DIR = os.environ.get('DL_CACHE_DIR') or os.path.expanduser('~/.dl-cache')
 
 
@@ -40,9 +46,6 @@ def main():
     elif re.match(URL_REGEX, src):
         type_ = 'u'
 
-    if not type_:
-        parser.error(f'{src}: source is neither a file nor a url')
-
     if os.path.isfile(dest) or os.path.isdir(dest):
         parser.error(f'{dest}: destination already exists')
 
@@ -52,8 +55,24 @@ def main():
     if type_ == 'f':
         if dest == '-':
             with open(src, 'rb') as src_f:
-                data = src_f.read()
-            sys.stdout.buffer.write(data)
+                shutil.copyfileobj(src_f, sys.stdout.buffer)
+        elif dest == 'cb':
+            print('reading source...')
+            data = bytearray()
+
+            with open(src, 'rb') as src_f:
+                start = time.time()
+                for chunk in iter(partial(src_f.read, 32), b''):
+                    data.extend(chunk)
+                end = time.time()
+
+            print(f'done in {round(end - start, 2)} seconds')
+            data = bytes(data)
+            print('copying content to clipboard...')
+            start = time.time()
+            pyclip.copy(data)
+            end = time.time()
+            print(f'done in {round(end - start, 2)} seconds')
         else:
             print(f'copying {src} to {dest}...')
             start = time.time()
@@ -63,6 +82,7 @@ def main():
     elif type_ == 'u':
         if dest == '-':
             change_stdout(0)
+
         func = requests.get if method == 'get' else requests.post
         print('sending http request...')
         start = time.time()
@@ -75,7 +95,15 @@ def main():
 
         if dest == '-':
             change_stdout(1)
-            sys.stdout.buffer.write(resp.content)
+
+            for chunk in resp.iter_content(32):
+                sys.stdout.buffer.write(chunk)
+        elif dest == 'cb':
+            print('copying content to clipboard...')
+            start = time.time()
+            pyclip.copy(resp.content)
+            end = time.time()
+            print(f'done in {round(end - start, 2)} seconds')
         else:
             cache_out = os.path.join(CACHE_DIR, str(time.time()))
             print('caching content...')
@@ -87,10 +115,8 @@ def main():
 
             print(f'done in {round(end - start, 2)} seconds')
             print('moving cached file to destination...')
-            start = time.time()
-            shutil.move(cache_out, dest)
-            end = time.time()
-            print(f'done in {round(end - start, 2)} seconds')
+    else:
+        parser.error(f'{src}: source is neither a file nor a url')
 
 
 if __name__ == '__main__':
